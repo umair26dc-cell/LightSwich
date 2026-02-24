@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0a">
+<title>devlight</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: #0a0a0a;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+    position: relative;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  /* ═══ GLOW LAYERS ═══ */
+
+  /* Pure white flood fill */
+  #glow-base {
+    position: fixed;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1;
+    transition: opacity 0.35s ease, background 0.2s ease;
+    background: #ffffff;
+  }
+
+  /* Radial bloom */
+  #glow-bloom {
+    position: fixed;
+    inset: -50%;
+    width: 200%;
+    height: 200%;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2;
+    transition: opacity 0.35s ease;
+  }
+
+  /* Blurry halo */
+  #glow-halo {
+    position: fixed;
+    inset: -120px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 3;
+    filter: blur(50px);
+    transition: opacity 0.35s ease;
+  }
+
+  /* ═══ UI ═══ */
+  .ui {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(18px, 4.5vh, 38px);
+    padding: 24px 20px;
+    transition: opacity 0.35s ease;
+  }
+
+  .ui.dim     { opacity: 0.5; }
+  .ui.glowing { opacity: 0; pointer-events: none; }
+
+  /* Tap to reveal UI when glowing */
+  #reveal-tap {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    display: none;
+  }
+  #reveal-tap.active { display: block; }
+
+  .title {
+    font-size: clamp(1.8rem, 5.5vw, 3rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .subtitle {
+    font-size: clamp(0.52rem, 1.8vw, 0.65rem);
+    color: #444;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-top: 5px;
+    text-align: center;
+    padding: 0 16px;
+    transition: color 0.3s;
+    max-width: 320px;
+  }
+
+  .percent-display {
+    font-size: clamp(3.5rem, 15vw, 8rem);
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.06em;
+    line-height: 1;
+    transition: color 0.3s;
+  }
+
+  /* ═══ COLOR SYSTEM ═══ */
+  .color-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 340px;
+  }
+
+  .color-label {
+    font-size: 0.58rem;
+    color: #333;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* Preset color swatches */
+  .color-presets {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .swatch:active { transform: scale(0.88); }
+  .swatch.active {
+    border-color: rgba(255,255,255,0.8);
+    transform: scale(1.15);
+  }
+
+  /* Custom color picker */
+  .custom-color-wrap {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+  .custom-color-wrap input[type="color"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+  }
+  .custom-color-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px dashed rgba(255,255,255,0.3);
+    background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+    pointer-events: none;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .custom-color-wrap:active .custom-color-btn { transform: scale(0.88); }
+  .custom-color-wrap.active .custom-color-btn {
+    border-color: rgba(255,255,255,0.8);
+    transform: scale(1.15);
+  }
+
+  /* Temp / tint sliders */
+  .sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .slider-row label {
+    font-size: 0.55rem;
+    color: #3a3a3a;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    width: 44px;
+    flex-shrink: 0;
+  }
+
+  .slider-row input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    background: #222;
+  }
+  .slider-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .slider-row input[type="range"]:active::-webkit-slider-thumb {
+    transform: scale(1.3);
+  }
+  .slider-row input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    border: none;
+  }
+
+  #temp-slider {
+    background: linear-gradient(to right, #ffd28a, #ffffff, #b3d4ff);
+  }
+  #tint-slider {
+    background: linear-gradient(to right, #ff80ff, #ffffff, #80ff80);
+  }
+
+  /* ═══ BUTTONS ═══ */
+  .btn-grid {
+    display: flex;
+    gap: clamp(7px, 2vw, 11px);
+    align-items: flex-end;
+    justify-content: center;
+    width: 100%;
+    padding: 0 16px;
+  }
+
+  .btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: clamp(0.58rem, 2.2vw, 0.7rem);
+    letter-spacing: 0.04em;
+    border: none;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.18s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 10px 0 9px;
+    color: #fff;
+    min-width: 44px;
+    flex: 1;
+    max-width: 76px;
+  }
+  .btn:active { transform: scale(0.93); }
+  .btn.selected {
+    outline: 2px solid rgba(255,255,255,0.6);
+    outline-offset: 2px;
+  }
+
+  .btn[data-level="1"] { height: clamp(50px, 11vh, 68px);   background: #1c1c1c; }
+  .btn[data-level="2"] { height: clamp(62px, 13vh, 82px);   background: #282828; }
+  .btn[data-level="3"] { height: clamp(74px, 15vh, 96px);   background: #363636; }
+  .btn[data-level="4"] { height: clamp(88px, 17vh, 112px);  background: #464646; }
+  .btn[data-level="5"] { height: clamp(102px, 19vh, 128px); background: #585858; }
+
+  .btn .bar {
+    width: 52%;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.4);
+    margin-bottom: 6px;
+  }
+  .btn[data-level="1"] .bar { height: 4px; }
+  .btn[data-level="2"] .bar { height: 8px; }
+  .btn[data-level="3"] .bar { height: 13px; }
+  .btn[data-level="4"] .bar { height: 18px; }
+  .btn[data-level="5"] .bar { height: 24px; }
+  .btn.selected .bar { background: rgba(255,255,255,0.95); }
+  .btn .label { font-size: 0.62rem; }
+
+  .btn-off {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: clamp(0.62rem, 2.2vw, 0.7rem);
+    letter-spacing: 0.1em;
+    background: transparent;
+    border: 1px solid #2a2a2a;
+    color: #4a4a4a;
+    padding: 13px clamp(22px, 5vw, 30px);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 48px;
+    min-width: 110px;
+  }
+  .btn-off:active { transform: scale(0.97); }
+
+  .hint {
+    font-size: clamp(0.48rem, 1.6vw, 0.56rem);
+    color: #252525;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .hint .desktop-only { display: none; }
+  @media (hover: hover) and (pointer: fine) {
+    .hint .desktop-only { display: inline; }
+    .hint .mobile-only  { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="glow-base"></div>
+<div id="glow-bloom"></div>
+<div id="glow-halo"></div>
+<div id="reveal-tap" onclick="revealUI()"></div>
+
+<div class="ui" id="ui">
+  <div class="header" style="text-align:center">
+    <div class="title">devlight</div>
+    <div class="subtitle" id="subtitle">// no light source detected, sadge</div>
+  </div>
+
+  <div class="percent-display" id="percent">OFF</div>
+
+  <!-- COLOR SYSTEM -->
+  <div class="color-section">
+    <div class="color-label">// color</div>
+    <div class="color-presets">
+      <!-- White (default) -->
+      <div class="swatch active" data-color="#ffffff" style="background:#ffffff" onclick="setSwatch(this)" title="white"></div>
+      <!-- Warm -->
+      <div class="swatch" data-color="#ffe4b0" style="background:#ffe4b0" onclick="setSwatch(this)" title="warm"></div>
+      <!-- Candle -->
+      <div class="swatch" data-color="#ffb347" style="background:#ffb347" onclick="setSwatch(this)" title="candle"></div>
+      <!-- Red -->
+      <div class="swatch" data-color="#ff4040" style="background:#ff4040" onclick="setSwatch(this)" title="red"></div>
+      <!-- Green -->
+      <div class="swatch" data-color="#40ff80" style="background:#40ff80" onclick="setSwatch(this)" title="green"></div>
+      <!-- Blue -->
+      <div class="swatch" data-color="#4090ff" style="background:#4090ff" onclick="setSwatch(this)" title="blue"></div>
+      <!-- Purple -->
+      <div class="swatch" data-color="#c060ff" style="background:#c060ff" onclick="setSwatch(this)" title="purple"></div>
+      <!-- Custom picker -->
+      <div class="custom-color-wrap" id="custom-wrap" title="custom color">
+        <input type="color" id="custom-color" value="#ff8040" onchange="setCustomColor(this.value)" oninput="setCustomColor(this.value)">
+        <div class="custom-color-btn"></div>
+      </div>
+    </div>
+
+    <div class="sliders">
+      <div class="slider-row">
+        <label>temp</label>
+        <input type="range" id="temp-slider" min="-100" max="100" value="0" oninput="updateColor()">
+      </div>
+      <div class="slider-row">
+        <label>tint</label>
+        <input type="range" id="tint-slider" min="-100" max="100" value="0" oninput="updateColor()">
+      </div>
+    </div>
+  </div>
+
+  <!-- BRIGHTNESS BUTTONS -->
+  <div class="btn-grid">
+    <button class="btn" data-level="1" onclick="setLight(this,'20%')">
+      <div class="bar"></div><span class="label">20%</span>
+    </button>
+    <button class="btn" data-level="2" onclick="setLight(this,'40%')">
+      <div class="bar"></div><span class="label">40%</span>
+    </button>
+    <button class="btn" data-level="3" onclick="setLight(this,'60%')">
+      <div class="bar"></div><span class="label">60%</span>
+    </button>
+    <button class="btn" data-level="4" onclick="setLight(this,'80%')">
+      <div class="bar"></div><span class="label">80%</span>
+    </button>
+    <button class="btn" data-level="5" onclick="setLight(this,'100%')">
+      <div class="bar"></div><span class="label">100%</span>
+    </button>
+  </div>
+
+  <button class="btn-off" onclick="turnOff()">[ OFF ]</button>
+
+  <div class="hint">
+    <span class="desktop-only">press 1–5 · ESC to off</span>
+    <span class="mobile-only">tap a level · tap screen to show controls</span>
+  </div>
+</div>
+
+<script>
+  const glowBase  = document.getElementById('glow-base');
+  const glowBloom = document.getElementById('glow-bloom');
+  const glowHalo  = document.getElementById('glow-halo');
+  const percentEl = document.getElementById('percent');
+  const subtitle  = document.getElementById('subtitle');
+  const ui        = document.getElementById('ui');
+  const revealTap = document.getElementById('reveal-tap');
+
+  let current     = null;
+  let wakeLock    = null;
+  let activeLevel = null;
+
+  // Color state
+  let baseColor = { r: 255, g: 255, b: 255 }; // current swatch color
+  let temp = 0; // -100 warm → +100 cool
+  let tint = 0; // -100 magenta → +100 green
+
+  const subtitles = {
+    off:   '// no light source detected, sadge',
+    '20%': '// barely visible. classic dev setup lol',
+    '40%': '// getting somewhere ngl',
+    '60%': '// respectable. mid flashlight vibes',
+    '80%': '// ok now we cooking fr',
+    '100%':'// FULL SEND. eyes.exe has stopped working',
+  };
+
+  // base opacity, bloom opacity, halo opacity
+  const levels = {
+    '20%': { base: 0.22, bloom: 0.5,  halo: 0.4  },
+    '40%': { base: 0.45, bloom: 0.68, halo: 0.62 },
+    '60%': { base: 0.65, bloom: 0.84, halo: 0.8  },
+    '80%': { base: 0.85, bloom: 0.97, halo: 0.94 },
+    '100%':{ base: 1.0,  bloom: 1.0,  halo: 1.0  },
+  };
+
+  /* ── COLOR MATH ── */
+  function hexToRgb(hex) {
+    const r = parseInt(hex.slice(1,3),16);
+    const g = parseInt(hex.slice(3,5),16);
+    const b = parseInt(hex.slice(5,7),16);
+    return { r, g, b };
+  }
+
+  function clamp(v) { return Math.max(0, Math.min(255, Math.round(v))); }
+
+  function getFinalColor() {
+    let { r, g, b } = baseColor;
+
+    // Temperature: warm = more red/yellow, cool = more blue
+    const t = temp; // -100 to 100
+    r = r + t * 0.5;
+    g = g + t * 0.15;
+    b = b - t * 0.6;
+
+    // Tint: negative = magenta, positive = green
+    const tn = tint; // -100 to 100
+    r = r - tn * 0.3;
+    g = g + tn * 0.5;
+    b = b - tn * 0.2;
+
+    return { r: clamp(r), g: clamp(g), b: clamp(b) };
+  }
+
+  function rgbToCss({ r, g, b }) {
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function applyColor() {
+    const col = getFinalColor();
+    const css = rgbToCss(col);
+
+    glowBase.style.background = css;
+
+    glowBloom.style.background = `radial-gradient(ellipse at 50% 50%,
+      ${css} 0%,
+      ${css} 12%,
+      rgba(${col.r},${col.g},${col.b},0.92) 28%,
+      rgba(${col.r},${col.g},${col.b},0.65) 50%,
+      rgba(${col.r},${col.g},${col.b},0.25) 70%,
+      transparent 85%
+    )`;
+
+    glowHalo.style.background = `radial-gradient(ellipse at 50% 50%,
+      rgba(${col.r},${col.g},${col.b},0.85) 0%,
+      rgba(${col.r},${col.g},${col.b},0.45) 35%,
+      rgba(${col.r},${col.g},${col.b},0.08) 65%,
+      transparent 80%
+    )`;
+
+    // body bg tints subtly with the color when lit
+    if (activeLevel) {
+      const frac = levels[activeLevel].base;
+      document.body.style.background = frac >= 0.85
+        ? css
+        : `rgb(${clamp(col.r*frac*0.3)},${clamp(col.g*frac*0.3)},${clamp(col.b*frac*0.3)})`;
+    }
+  }
+
+  function updateColor() {
+    temp = parseInt(document.getElementById('temp-slider').value);
+    tint = parseInt(document.getElementById('tint-slider').value);
+    applyColor();
+  }
+
+  function setSwatch(el) {
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    document.getElementById('custom-wrap').classList.remove('active');
+    el.classList.add('active');
+    baseColor = hexToRgb(el.dataset.color);
+    applyColor();
+  }
+
+  function setCustomColor(hex) {
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    document.getElementById('custom-wrap').classList.add('active');
+    baseColor = hexToRgb(hex);
+    applyColor();
+  }
+
+  /* ── WAKE LOCK ── */
+  async function requestWakeLock() {
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+  }
+  async function releaseWakeLock() {
+    if (wakeLock) { await wakeLock.release(); wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible' && current) await requestWakeLock();
+  });
+
+  /* ── LIGHT CONTROL ── */
+  async function setLight(btn, label) {
+    const cfg = levels[label];
+    activeLevel = label;
+
+    glowBase.style.opacity  = cfg.base;
+    glowBloom.style.opacity = cfg.bloom;
+    glowHalo.style.opacity  = cfg.halo;
+
+    applyColor();
+
+    // At max brightness: UI disappears, reveal tap shows
+    if (cfg.base >= 0.85) {
+      ui.className = 'ui glowing';
+      revealTap.classList.add('active');
+    } else if (cfg.base >= 0.45) {
+      ui.className = 'ui dim';
+      revealTap.classList.remove('active');
+    } else {
+      ui.className = 'ui';
+      revealTap.classList.remove('active');
+    }
+
+    percentEl.textContent = label;
+    subtitle.textContent  = subtitles[label];
+
+    document.querySelectorAll('.btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    current = btn;
+
+    await requestWakeLock();
+  }
+
+  let uiHideTimer = null;
+  function revealUI() {
+    ui.className = 'ui';
+    revealTap.classList.remove('active');
+    clearTimeout(uiHideTimer);
+    uiHideTimer = setTimeout(() => {
+      if (activeLevel && levels[activeLevel].base >= 0.85) {
+        ui.className = 'ui glowing';
+        revealTap.classList.add('active');
+      }
+    }, 3000);
+  }
+
+  async function turnOff() {
+    glowBase.style.opacity  = 0;
+    glowBloom.style.opacity = 0;
+    glowHalo.style.opacity  = 0;
+    document.body.style.background = '#0a0a0a';
+    ui.className = 'ui';
+    revealTap.classList.remove('active');
+    clearTimeout(uiHideTimer);
+
+    activeLevel = null;
+    percentEl.textContent = 'OFF';
+    subtitle.textContent  = subtitles.off;
+    document.querySelectorAll('.btn').forEach(b => b.classList.remove('selected'));
+    current = null;
+    await releaseWakeLock();
+  }
+
+  document.addEventListener('keydown', e => {
+    const map = {'1':0,'2':1,'3':2,'4':3,'5':4};
+    if (e.key in map) document.querySelectorAll('.btn')[map[e.key]].click();
+    if (e.key === 'Escape') turnOff();
+  });
+
+  // Init color layers on load
+  applyColor();
+</script>
+</body>
+</html>
